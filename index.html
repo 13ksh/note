@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>음성 → 텍스트 (HTML 한 파일 버전)</title>
+<style>
+    body {
+        background: #0a0a0f;
+        color: #e5e5e5;
+        font-family: "JetBrains Mono", monospace;
+        text-align: center;
+        padding: 20px;
+    }
+    h1 { color: #c28cff; }
+    #text {
+        margin-top: 20px;
+        padding: 20px;
+        border: 1px solid #555;
+        min-height: 120px;
+        width: 80%;
+        margin-left: auto;
+        margin-right: auto;
+        background: #11141f;
+        border-radius: 8px;
+        white-space: pre-wrap;
+    }
+    button {
+        background: #8f5eff;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 6px;
+        color: #fff;
+        cursor: pointer;
+        margin: 10px;
+        font-size: 16px;
+    }
+</style>
+</head>
+
+<body>
+<h1>🎙 브라우저 음성 인식 (한 HTML 파일)</h1>
+<button id="start">녹음 시작</button>
+<button id="stop">녹음 종료</button>
+
+<div id="text">여기에 인식된 텍스트가 나타납니다.</div>
+
+<script>
+let recognition;
+let recognizing = false;
+
+if ("webkitSpeechRecognition" in window) {
+    recognition = new webkitSpeechRecognition();
+    recognition.lang = "ko-KR";
+    recognition.interimResults = true;
+    recognition.continuous = true;
+
+    recognition.onresult = (event) => {
+        let text = "";
+        for (let i = 0; i < event.results.length; i++) {
+            text += event.results[i][0].transcript + " ";
+        }
+        document.getElementById("text").innerText = text.trim();
+    };
+
+    recognition.onerror = (e) => {
+        console.log("에러:", e.error);
+    };
+} else {
+    alert("이 브라우저는 Web Speech API를 지원하지 않습니다.");
+}
+
+document.getElementById("start").onclick = () => {
+    if (!recognizing) {
+        recognition.start();
+        recognizing = true;
+    }
+};
+
+document.getElementById("stop").onclick = () => {
+    if (recognizing) {
+        recognition.stop();
+        recognizing = false;
+    }
+};
+</script>
+</body>
+</html>
