@@ -4,20 +4,37 @@
 <meta charset="UTF-8">
 <title>Host</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
- body { background:#0c0c0f; color:#eee; font-family:monospace; padding:20px; }
+    body { font-family: Arial; background:white; padding:20px; color:#222; }
+    textarea { width:100%; height:120px; }
+    #codeBox {
+        margin-top:20px;
+        font-size:40px;
+        font-weight:bold;
+        letter-spacing:5px;
+        text-align:center;
+        padding:20px;
+        border:2px dashed #666;
+        width:260px;
+        background:#f8f8f8;
+    }
+    #log {
+        background:#f5f5f5;
+        padding:10px;
+        margin-top:20px;
+        white-space:pre-wrap;
+    }
 </style>
 </head>
 <body>
 
 <h2>Host</h2>
-<button onclick="start()">Create Offer & QR</button>
+<button onclick="start()">Create Offer</button>
 
-<div id="qrcode" style="margin-top:20px;"></div>
+<div id="codeBox">코드 없음</div>
 
-<h3>Answer 입력:</h3>
-<textarea id="answerBox" style="width:100%;height:120px;"></textarea>
+<h3>Answer 입력</h3>
+<textarea id="answerBox"></textarea>
 <button onclick="applyAnswer()">Apply</button>
 
 <pre id="log"></pre>
@@ -25,7 +42,9 @@
 <script>
 const WORKER_URL = "https://chat.keddie213.workers.dev/";
 
-function log(t){ document.getElementById("log").textContent += t + "\n"; }
+function log(t){
+    document.getElementById("log").textContent += t + "\n";
+}
 
 function generateCode8(){
     const c = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -43,49 +62,47 @@ function minimize(sdp){
     return sdp.split("\n").filter(l => allowed.some(k => l.startsWith(k))).join("\n");
 }
 
-function compressToLimit(sdp){
+function compressLimit(sdp){
     let min = minimize(sdp);
     let comp = LZString.compressToEncodedURIComponent(min);
-    if (comp.length < 770) comp += "_".repeat(770 - comp.length);
-    if (comp.length > 800) comp = comp.slice(0,800);
+    if(comp.length < 770) comp += "_".repeat(770 - comp.length);
+    if(comp.length > 800) comp = comp.slice(0,800);
     return comp;
 }
 
-let pc, channel;
+let pc, ch;
 
 async function start(){
     pc = new RTCPeerConnection();
-    channel = pc.createDataChannel("chat");
-    channel.onmessage = e => log("Guest: " + e.data);
+    ch = pc.createDataChannel("chat");
+    ch.onmessage = e => log("Guest: " + e.data);
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    let compressed = compressToLimit(pc.localDescription.sdp);
+    const code = generateCode8();
+    const compressed = compressLimit(pc.localDescription.sdp);
 
-    let code = generateCode8();
-
-    // Worker 업로드
+    // Worker에 업로드
     await fetch(WORKER_URL, {
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ code:code, data:compressed })
+        body: JSON.stringify({ code:code, data:compressed })
     });
 
-    // QR 출력
-    new QRCode(document.getElementById("qrcode"), WORKER_URL + code);
+    // 화면에 코드 띄우기
+    document.getElementById("codeBox").textContent = code;
 
-    log("방 코드: " + code);
-    log("QR 생성됨.");
+    log("생성된 방 코드: " + code);
 }
 
 async function applyAnswer(){
     let ans = document.getElementById("answerBox").value.trim();
     let sdp = LZString.decompressFromEncodedURIComponent(ans);
     await pc.setRemoteDescription({ type:"answer", sdp });
-    log("answer 적용됨.");
+    log("Answer 적용됨.");
 }
-
 </script>
+
 </body>
 </html>
