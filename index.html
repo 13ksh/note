@@ -33,13 +33,17 @@ function rand8(){
   return out;
 }
 
-function minimize(s){
-  const keep=[
+function minimize(sdp){
+  const keep = [
     "v=","o=","s=","t=",
     "a=ice-ufrag","a=ice-pwd","a=fingerprint","a=setup",
-    "m=application","a=sctp-port","a=max-message-size"
+    "m=application","a=sctp-port","a=max-message-size",
+    "a=candidate" // ★ 이거 추가해야 WebRTC가 연결됨
   ];
-  return s.split("\n").filter(l => keep.some(k=>l.startsWith(k))).join("\n");
+
+  return sdp.split("\n").filter(line =>
+    keep.some(k => line.startsWith(k))
+  ).join("\n");
 }
 
 function compressSmall(s){
