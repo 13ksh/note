@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>Guest</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 <style>
@@ -10,53 +10,52 @@ body { font-family: monospace; margin: 20px; }
 </head>
 <body>
 
-<h2>Guest</h2>
+<h2>GUEST</h2>
 
-<input id="codeInput" placeholder="방 코드 8자리 입력" />
+<input id="code" placeholder="방 코드 8자리 입력">
 <button onclick="join()">Join</button>
 
 <pre id="log"></pre>
 
 <script>
 const WORKER = "https://chat.keddie213.workers.dev/";
+function log(t){ document.getElementById("log").textContent += t + "\n"; }
 
 let pc, channel;
-function log(t){ document.getElementById("log").textContent += t+"\n"; }
 
 async function join(){
-  const code = document.getElementById("codeInput").value.trim();
-  if(code.length != 8) return alert("8자리 코드 입력!");
+  const code = document.getElementById("code").value.trim();
+  if(code.length != 8) return alert("코드 8자리 입력해라");
 
-  log("📡 Offer 가져오는 중...");
+  log("📡 Fetching offer...");
 
-  let offerEnc = await fetch(WORKER + code);
-  if(!offerEnc.ok) return log("❌ Offer 없음");
+  let res = await fetch(WORKER + code);
+  if(!res.ok) return log("❌ Offer not found.");
 
-  let offerData = await offerEnc.text();
-  let sdp = LZString.decompressFromEncodedURIComponent(offerData);
+  let compressed = await res.text();
+  let sdp = LZString.decompressFromEncodedURIComponent(compressed);
 
   pc = new RTCPeerConnection();
-  pc.ondatachannel = ev=>{
+  pc.ondatachannel = (ev)=>{
     channel = ev.channel;
-    channel.onmessage = e=> log("👤 Host: " + e.data);
-    channel.onopen = ()=> log("🔵 연결됨!");
+    channel.onmessage = e => log("👤 Host: " + e.data);
+    channel.onopen = ()=> log("🔵 Connected!");
   };
 
-  await pc.setRemoteDescription({ type:"offer", sdp });
+  await pc.setRemoteDescription({ type: "offer", sdp });
 
-  let answer = await pc.createAnswer();
+  const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
 
-  let ansCompressed = LZString.compressToEncodedURIComponent(answer.sdp);
+  const ansComp = LZString.compressToEncodedURIComponent(answer.sdp);
 
-  // Worker에 answer 저장
   await fetch(WORKER + code + "_ans", {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ data: ansCompressed })
+    body: JSON.stringify({ data: ansComp })
   });
 
-  log("📨 Answer 전송 완료!");
+  log("📨 Answer sent!");
 }
 </script>
 

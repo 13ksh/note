@@ -1,21 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>Host</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 <style>
 body { font-family: monospace; margin: 20px; }
-.codeBox{
-  font-size:40px; border:2px dashed #333; padding:10px; display:inline-block;
-}
+.codeBox { font-size: 40px; border: 2px dashed #333; padding: 10px; display: inline-block; }
 </style>
 </head>
 <body>
 
-<h2>Host</h2>
+<h2>HOST</h2>
 <button onclick="startHost()">Create Offer</button>
-
 <div id="codeBox" class="codeBox"></div>
 
 <pre id="log"></pre>
@@ -23,74 +20,52 @@ body { font-family: monospace; margin: 20px; }
 <script>
 const WORKER = "https://chat.keddie213.workers.dev/";
 
-let pc, channel;
-function log(t){ document.getElementById("log").textContent += t+"\n"; }
+function log(t){ document.getElementById("log").textContent += t + "\n"; }
 
 function rand8(){
   const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out="";
-  for(let i=0;i<8;i++) out += c[Math.floor(Math.random()*c.length)];
-  return out;
+  return [...Array(8)].map(()=>c[Math.floor(Math.random()*c.length)]).join("");
 }
 
-function minimize(sdp){
-  const keep = [
-    "v=","o=","s=","t=",
-    "a=ice-ufrag","a=ice-pwd","a=fingerprint","a=setup",
-    "m=application","a=sctp-port","a=max-message-size",
-    "a=candidate"
-  ];
-
-  return sdp.split("\n").filter(line =>
-    keep.some(k => line.startsWith(k))
-  ).join("\n");
-}
-
-function compressSmall(sdp){
-  const minimized = minimize(sdp);  // ICE 후보 살리기
-  return LZString.compressToEncodedURIComponent(minimized);
-}
+let pc, channel;
 
 async function startHost(){
   pc = new RTCPeerConnection();
   channel = pc.createDataChannel("msg");
-  channel.onopen = ()=> log("🔵 채팅 열림");
-  channel.onmessage = ev => log("👤 Guest: " + ev.data);
+  channel.onopen = () => log("🔵 DataChannel opened!");
+  channel.onmessage = e => log("👤 Guest: " + e.data);
 
-  let offer = await pc.createOffer();
+  const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  let code = rand8();
+  const code = rand8();
   document.getElementById("codeBox").innerText = code;
 
-  let compressed = compressSmall(pc.localDescription.sdp);
+  const comp = LZString.compressToEncodedURIComponent(offer.sdp);
 
   await fetch(WORKER + code, {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({ data: compressed })
+    method: "POST",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({ data: comp })
   });
 
-  log("📨 Offer 저장됨. 코드 전달하세요: " + code);
-
-  pollAnswer(code);
+  log("📨 Offer saved → " + code);
+  waitAnswer(code);
 }
 
-
-// Guest의 answer 기다림
-async function pollAnswer(code){
-  log("⏳ Answer 기다리는 중...");
+async function waitAnswer(code){
+  log("⏳ Waiting for answer...");
 
   while(true){
-    let res = await fetch(WORKER + code + "_ans");
+    const res = await fetch(WORKER + code + "_ans");
     if(res.ok){
-      let enc = await res.text();
-      let sdp = LZString.decompressFromEncodedURIComponent(enc);
-      await pc.setRemoteDescription({ type:"answer", sdp });
-      log("✅ Answer 적용 완료!");
+      const enc = await res.text();
+      const sdp = LZString.decompressFromEncodedURIComponent(enc);
+      await pc.setRemoteDescription({ type: "answer", sdp });
+      log("✅ Answer applied! Connected.");
       break;
     }
-    await new Promise(r=>setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 800));
   }
 }
 </script>
