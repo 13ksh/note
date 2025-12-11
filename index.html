@@ -5,104 +5,83 @@
 <title>Host</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 <style>
-    body { font-family: Arial; background:white; padding:20px; color:#222; }
-    textarea { width:100%; height:120px; }
-    #codeBox {
-        margin-top:20px;
-        font-size:40px;
-        font-weight:bold;
-        letter-spacing:5px;
-        text-align:center;
-        padding:20px;
-        border:2px dashed #666;
-        width:260px;
-        background:#f8f8f8;
-    }
-    #log {
-        background:#f5f5f5;
-        padding:10px;
-        margin-top:20px;
-        white-space:pre-wrap;
-    }
+ body { font-family: Arial; padding:20px; }
+ #codeBox {
+   font-size:32px;
+   width:200px;
+   text-align:center;
+   padding:10px;
+   border:2px dashed #555;
+   margin-top:20px;
+   background:#f7f7f7;
+ }
+ textarea { width:100%; height:100px; margin-top:10px; }
+ pre { background:#eee; padding:10px; margin-top:20px; }
 </style>
 </head>
 <body>
 
-<h2>Host</h2>
-<button onclick="start()">Create Offer</button>
+<h2>HOST</h2>
+<button onclick="startHost()">Create Offer</button>
+<div id="codeBox">NO CODE</div>
 
-<div id="codeBox">코드 없음</div>
-
-<h3>Answer 입력</h3>
-<textarea id="answerBox"></textarea>
-<button onclick="applyAnswer()">Apply</button>
+<h3>Guest answer 입력</h3>
+<textarea id="ansBox"></textarea>
+<button onclick="applyAnswer()">Apply Answer</button>
 
 <pre id="log"></pre>
 
 <script>
-const WORKER_URL = "https://chat.keddie213.workers.dev/";
+const SERVER = "https://chat.keddie213.workers.dev/";
 
-function log(t){
-    document.getElementById("log").textContent += t + "\n";
-}
+function log(t){ document.getElementById("log").textContent += t + "\n"; }
 
-function generateCode8(){
-    const c = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let out = "";
-    for(let i=0;i<8;i++) out += c[Math.floor(Math.random()*c.length)];
-    return out;
+function gen8(){
+  const s="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  return Array(8).fill(0).map(()=>s[Math.floor(Math.random()*s.length)]).join("");
 }
 
 function minimize(sdp){
-    const allowed = [
-        "v=","o=","s=","t=",
-        "a=ice-ufrag","a=ice-pwd","a=fingerprint","a=setup",
-        "m=application","a=sctp-port","a=max-message-size"
-    ];
-    return sdp.split("\n").filter(l => allowed.some(k => l.startsWith(k))).join("\n");
+  const keep=["v=","o=","s=","t=","a=ice-ufrag","a=ice-pwd","a=fingerprint","a=setup","m=application","a=sctp-port"];
+  return sdp.split("\n").filter(l => keep.some(k=>l.startsWith(k))).join("\n");
 }
 
-function compressLimit(sdp){
-    let min = minimize(sdp);
-    let comp = LZString.compressToEncodedURIComponent(min);
-    if(comp.length < 770) comp += "_".repeat(770 - comp.length);
-    if(comp.length > 800) comp = comp.slice(0,800);
-    return comp;
+function compress(sdp){
+  let m = minimize(sdp);
+  return LZString.compressToEncodedURIComponent(m);
 }
 
-let pc, ch;
+let pc, code;
 
-async function start(){
-    pc = new RTCPeerConnection();
-    ch = pc.createDataChannel("chat");
-    ch.onmessage = e => log("Guest: " + e.data);
+async function startHost(){
+  pc = new RTCPeerConnection();
+  pc.createDataChannel("chat");
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
 
-    const code = generateCode8();
-    const compressed = compressLimit(pc.localDescription.sdp);
+  code = gen8();
+  document.getElementById("codeBox").textContent = code;
 
-    // Worker에 업로드
-    await fetch(WORKER_URL, {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ code:code, data:compressed })
-    });
+  const cmp = compress(pc.localDescription.sdp);
 
-    // 화면에 코드 띄우기
-    document.getElementById("codeBox").textContent = code;
+  await fetch(SERVER, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({ code, data:cmp })
+  });
 
-    log("생성된 방 코드: " + code);
+  log("Offer 저장됨. 코드: " + code);
+  log("게스트에게 CODE만 알려줘.");
 }
 
 async function applyAnswer(){
-    let ans = document.getElementById("answerBox").value.trim();
-    let sdp = LZString.decompressFromEncodedURIComponent(ans);
-    await pc.setRemoteDescription({ type:"answer", sdp });
-    log("Answer 적용됨.");
+  const raw = document.getElementById("ansBox").value.trim();
+  const sdp = LZString.decompressFromEncodedURIComponent(raw);
+
+  await pc.setRemoteDescription({ type:"answer", sdp });
+  log("ANSWER 적용됨. 연결 완료.");
 }
 </script>
-
 </body>
 </html>

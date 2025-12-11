@@ -4,49 +4,56 @@
 <meta charset="UTF-8">
 <title>Guest</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+<style>
+ body { font-family: Arial; padding:20px; }
+ textarea { width:100%; height:100px; margin-top:10px; }
+ pre { background:#eee; padding:10px; margin-top:20px; }
+</style>
 </head>
-<body style="background:#0c0c0f;color:#eee;font-family:monospace;padding:20px;">
+<body>
 
-<h2>Guest</h2>
-
-방 코드:
-<input id="code" placeholder="ABCDEFGH">
+<h2>GUEST</h2>
+코드: <input id="codeIn" maxlength="8" style="width:120px;">
 <button onclick="connect()">Connect</button>
 
-<h3>Your Answer (Host에게 전달):</h3>
-<textarea id="ansOut" style="width:100%;height:120px;"></textarea>
+<h3>생성된 ANSWER (Host에게 전달)</h3>
+<textarea id="ansOut"></textarea>
 
 <pre id="log"></pre>
 
 <script>
-const WORKER_URL = "https://chat.keddie213.workers.dev/";
+const SERVER = "https://chat.keddie213.workers.dev/";
 
 function log(t){ document.getElementById("log").textContent += t + "\n"; }
 
-let pc, channel;
+function decompress(s){ return LZString.decompressFromEncodedURIComponent(s); }
+function compress(s){ return LZString.compressToEncodedURIComponent(s); }
+
+let pc;
 
 async function connect(){
-    let code = document.getElementById("code").value.trim();
-    let compressed = await fetch(WORKER_URL + code).then(r=>r.text());
-    
-    let offerSDP = LZString.decompressFromEncodedURIComponent(compressed);
+  const code = document.getElementById("codeIn").value.trim();
+  if(code.length !== 8){ alert("8자리 코드 입력"); return; }
 
-    pc = new RTCPeerConnection();
-    pc.ondatachannel = ev => {
-        channel = ev.channel;
-        channel.onmessage = e => log("Host: " + e.data);
-    };
+  const offer = await (await fetch(SERVER + code)).text();
+  const offerSDP = decompress(offer);
 
-    await pc.setRemoteDescription({ type:"offer", sdp: offerSDP });
+  pc = new RTCPeerConnection();
 
-    let answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
+  pc.ondatachannel = e => {
+    const ch = e.channel;
+    ch.onmessage = msg => log("Host: " + msg.data);
+  };
 
-    let compAns = LZString.compressToEncodedURIComponent(answer.sdp);
+  await pc.setRemoteDescription({ type:"offer", sdp:offerSDP });
 
-    document.getElementById("ansOut").value = compAns;
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
 
-    log("Answer 생성됨 → Host에게 전달해라.");
+  const answerCmp = compress(answer.sdp);
+  document.getElementById("ansOut").value = answerCmp;
+
+  log("ANSWER 생성됨 → Host에게 전달해야 함.");
 }
 </script>
 
