@@ -38,7 +38,7 @@ function minimize(sdp){
     "v=","o=","s=","t=",
     "a=ice-ufrag","a=ice-pwd","a=fingerprint","a=setup",
     "m=application","a=sctp-port","a=max-message-size",
-    "a=candidate" // ★ 이거 추가해야 WebRTC가 연결됨
+    "a=candidate"
   ];
 
   return sdp.split("\n").filter(line =>
@@ -46,11 +46,9 @@ function minimize(sdp){
   ).join("\n");
 }
 
-function compressSmall(s){
-  let min = minimize(s);
-  let comp = LZString.compressToEncodedURIComponent(min);
-  if (comp.length < 300) comp += "_".repeat(300 - comp.length);
-  return comp.slice(0, 600);
+function compressSmall(sdp){
+  const minimized = minimize(sdp);  // ICE 후보 살리기
+  return LZString.compressToEncodedURIComponent(minimized);
 }
 
 async function startHost(){
