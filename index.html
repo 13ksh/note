@@ -1,87 +1,91 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>음성 → 텍스트 (HTML 한 파일 버전)</title>
+<title>Host</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
-    body {
-        background: #0a0a0f;
-        color: #e5e5e5;
-        font-family: "JetBrains Mono", monospace;
-        text-align: center;
-        padding: 20px;
-    }
-    h1 { color: #c28cff; }
-    #text {
-        margin-top: 20px;
-        padding: 20px;
-        border: 1px solid #555;
-        min-height: 120px;
-        width: 80%;
-        margin-left: auto;
-        margin-right: auto;
-        background: #11141f;
-        border-radius: 8px;
-        white-space: pre-wrap;
-    }
-    button {
-        background: #8f5eff;
-        padding: 12px 20px;
-        border: none;
-        border-radius: 6px;
-        color: #fff;
-        cursor: pointer;
-        margin: 10px;
-        font-size: 16px;
-    }
+ body { background:#0c0c0f; color:#eee; font-family:monospace; padding:20px; }
 </style>
 </head>
-
 <body>
-<h1>🎙 브라우저 음성 인식 (한 HTML 파일)</h1>
-<button id="start">녹음 시작</button>
-<button id="stop">녹음 종료</button>
 
-<div id="text">여기에 인식된 텍스트가 나타납니다.</div>
+<h2>Host</h2>
+<button onclick="start()">Create Offer & QR</button>
+
+<div id="qrcode" style="margin-top:20px;"></div>
+
+<h3>Answer 입력:</h3>
+<textarea id="answerBox" style="width:100%;height:120px;"></textarea>
+<button onclick="applyAnswer()">Apply</button>
+
+<pre id="log"></pre>
 
 <script>
-let recognition;
-let recognizing = false;
+const WORKER_URL = "https://chat.keddie213.workers.dev/";
 
-if ("webkitSpeechRecognition" in window) {
-    recognition = new webkitSpeechRecognition();
-    recognition.lang = "ko-KR";
-    recognition.interimResults = true;
-    recognition.continuous = true;
+function log(t){ document.getElementById("log").textContent += t + "\n"; }
 
-    recognition.onresult = (event) => {
-        let text = "";
-        for (let i = 0; i < event.results.length; i++) {
-            text += event.results[i][0].transcript + " ";
-        }
-        document.getElementById("text").innerText = text.trim();
-    };
-
-    recognition.onerror = (e) => {
-        console.log("에러:", e.error);
-    };
-} else {
-    alert("이 브라우저는 Web Speech API를 지원하지 않습니다.");
+function generateCode8(){
+    const c = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let out = "";
+    for(let i=0;i<8;i++) out += c[Math.floor(Math.random()*c.length)];
+    return out;
 }
 
-document.getElementById("start").onclick = () => {
-    if (!recognizing) {
-        recognition.start();
-        recognizing = true;
-    }
-};
+function minimize(sdp){
+    const allowed = [
+        "v=","o=","s=","t=",
+        "a=ice-ufrag","a=ice-pwd","a=fingerprint","a=setup",
+        "m=application","a=sctp-port","a=max-message-size"
+    ];
+    return sdp.split("\n").filter(l => allowed.some(k => l.startsWith(k))).join("\n");
+}
 
-document.getElementById("stop").onclick = () => {
-    if (recognizing) {
-        recognition.stop();
-        recognizing = false;
-    }
-};
+function compressToLimit(sdp){
+    let min = minimize(sdp);
+    let comp = LZString.compressToEncodedURIComponent(min);
+    if (comp.length < 770) comp += "_".repeat(770 - comp.length);
+    if (comp.length > 800) comp = comp.slice(0,800);
+    return comp;
+}
+
+let pc, channel;
+
+async function start(){
+    pc = new RTCPeerConnection();
+    channel = pc.createDataChannel("chat");
+    channel.onmessage = e => log("Guest: " + e.data);
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    let compressed = compressToLimit(pc.localDescription.sdp);
+
+    let code = generateCode8();
+
+    // Worker 업로드
+    await fetch(WORKER_URL, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({ code:code, data:compressed })
+    });
+
+    // QR 출력
+    new QRCode(document.getElementById("qrcode"), WORKER_URL + code);
+
+    log("방 코드: " + code);
+    log("QR 생성됨.");
+}
+
+async function applyAnswer(){
+    let ans = document.getElementById("answerBox").value.trim();
+    let sdp = LZString.decompressFromEncodedURIComponent(ans);
+    await pc.setRemoteDescription({ type:"answer", sdp });
+    log("answer 적용됨.");
+}
+
 </script>
 </body>
 </html>

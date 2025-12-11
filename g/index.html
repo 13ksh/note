@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Guest</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+</head>
+<body style="background:#0c0c0f;color:#eee;font-family:monospace;padding:20px;">
+
+<h2>Guest</h2>
+
+방 코드:
+<input id="code" placeholder="ABCDEFGH">
+<button onclick="connect()">Connect</button>
+
+<h3>Your Answer (Host에게 전달):</h3>
+<textarea id="ansOut" style="width:100%;height:120px;"></textarea>
+
+<pre id="log"></pre>
+
+<script>
+const WORKER_URL = "https://chat.keddie213.workers.dev/";
+
+function log(t){ document.getElementById("log").textContent += t + "\n"; }
+
+let pc, channel;
+
+async function connect(){
+    let code = document.getElementById("code").value.trim();
+    let compressed = await fetch(WORKER_URL + code).then(r=>r.text());
+    
+    let offerSDP = LZString.decompressFromEncodedURIComponent(compressed);
+
+    pc = new RTCPeerConnection();
+    pc.ondatachannel = ev => {
+        channel = ev.channel;
+        channel.onmessage = e => log("Host: " + e.data);
+    };
+
+    await pc.setRemoteDescription({ type:"offer", sdp: offerSDP });
+
+    let answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    let compAns = LZString.compressToEncodedURIComponent(answer.sdp);
+
+    document.getElementById("ansOut").value = compAns;
+
+    log("Answer 생성됨 → Host에게 전달해라.");
+}
+</script>
+
+</body>
+</html>
