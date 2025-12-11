@@ -1,87 +1,97 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>Host</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 <style>
- body { font-family: Arial; padding:20px; }
- #codeBox {
-   font-size:32px;
-   width:200px;
-   text-align:center;
-   padding:10px;
-   border:2px dashed #555;
-   margin-top:20px;
-   background:#f7f7f7;
- }
- textarea { width:100%; height:100px; margin-top:10px; }
- pre { background:#eee; padding:10px; margin-top:20px; }
+body { font-family: monospace; margin: 20px; }
+.codeBox{
+  font-size:40px; border:2px dashed #333; padding:10px; display:inline-block;
+}
 </style>
 </head>
 <body>
 
-<h2>HOST</h2>
+<h2>Host</h2>
 <button onclick="startHost()">Create Offer</button>
-<div id="codeBox">NO CODE</div>
 
-<h3>Guest answer 입력</h3>
-<textarea id="ansBox"></textarea>
-<button onclick="applyAnswer()">Apply Answer</button>
+<div id="codeBox" class="codeBox"></div>
 
 <pre id="log"></pre>
 
 <script>
-const SERVER = "https://chat.keddie213.workers.dev/";
+const WORKER = "https://chat.keddie213.workers.dev/";
 
-function log(t){ document.getElementById("log").textContent += t + "\n"; }
+let pc, channel;
+function log(t){ document.getElementById("log").textContent += t+"\n"; }
 
-function gen8(){
-  const s="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  return Array(8).fill(0).map(()=>s[Math.floor(Math.random()*s.length)]).join("");
+function rand8(){
+  const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out="";
+  for(let i=0;i<8;i++) out += c[Math.floor(Math.random()*c.length)];
+  return out;
 }
 
-function minimize(sdp){
-  const keep=["v=","o=","s=","t=","a=ice-ufrag","a=ice-pwd","a=fingerprint","a=setup","m=application","a=sctp-port"];
-  return sdp.split("\n").filter(l => keep.some(k=>l.startsWith(k))).join("\n");
+function minimize(s){
+  const keep=[
+    "v=","o=","s=","t=",
+    "a=ice-ufrag","a=ice-pwd","a=fingerprint","a=setup",
+    "m=application","a=sctp-port","a=max-message-size"
+  ];
+  return s.split("\n").filter(l => keep.some(k=>l.startsWith(k))).join("\n");
 }
 
-function compress(sdp){
-  let m = minimize(sdp);
-  return LZString.compressToEncodedURIComponent(m);
+function compressSmall(s){
+  let min = minimize(s);
+  let comp = LZString.compressToEncodedURIComponent(min);
+  if (comp.length < 300) comp += "_".repeat(300 - comp.length);
+  return comp.slice(0, 600);
 }
-
-let pc, code;
 
 async function startHost(){
   pc = new RTCPeerConnection();
-  pc.createDataChannel("chat");
+  channel = pc.createDataChannel("msg");
+  channel.onopen = ()=> log("🔵 채팅 열림");
+  channel.onmessage = ev => log("👤 Guest: " + ev.data);
 
-  const offer = await pc.createOffer();
+  let offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  code = gen8();
-  document.getElementById("codeBox").textContent = code;
+  let code = rand8();
+  document.getElementById("codeBox").innerText = code;
 
-  const cmp = compress(pc.localDescription.sdp);
+  let compressed = compressSmall(pc.localDescription.sdp);
 
-  await fetch(SERVER, {
+  await fetch(WORKER + code, {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({ code, data:cmp })
+    body:JSON.stringify({ data: compressed })
   });
 
-  log("Offer 저장됨. 코드: " + code);
-  log("게스트에게 CODE만 알려줘.");
+  log("📨 Offer 저장됨. 코드 전달하세요: " + code);
+
+  pollAnswer(code);
 }
 
-async function applyAnswer(){
-  const raw = document.getElementById("ansBox").value.trim();
-  const sdp = LZString.decompressFromEncodedURIComponent(raw);
 
-  await pc.setRemoteDescription({ type:"answer", sdp });
-  log("ANSWER 적용됨. 연결 완료.");
+// Guest의 answer 기다림
+async function pollAnswer(code){
+  log("⏳ Answer 기다리는 중...");
+
+  while(true){
+    let res = await fetch(WORKER + code + "_ans");
+    if(res.ok){
+      let enc = await res.text();
+      let sdp = LZString.decompressFromEncodedURIComponent(enc);
+      await pc.setRemoteDescription({ type:"answer", sdp });
+      log("✅ Answer 적용 완료!");
+      break;
+    }
+    await new Promise(r=>setTimeout(r, 1000));
+  }
 }
 </script>
+
 </body>
 </html>

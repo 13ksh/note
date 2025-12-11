@@ -1,79 +1,64 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>Guest</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 <style>
- body { font-family: monospace; padding:20px; }
- input, button { font-size:18px; padding:8px; margin:5px; }
- textarea { width:100%; height:120px; }
+body { font-family: monospace; margin: 20px; }
 </style>
 </head>
 <body>
 
 <h2>Guest</h2>
 
-방 코드 입력:  
-<input id="room" placeholder="8자리 코드" maxlength="8">
-<button onclick="connectRoom()">Connect</button>
+<input id="codeInput" placeholder="방 코드 8자리 입력" />
+<button onclick="join()">Join</button>
 
-<h3>생성된 Answer</h3>
-<textarea id="answerBox"></textarea>
-
-<p id="status"></p>
+<pre id="log"></pre>
 
 <script>
-const SERVER = "https://chat.keddie213.workers.dev/";
+const WORKER = "https://chat.keddie213.workers.dev/";
 
 let pc, channel;
+function log(t){ document.getElementById("log").textContent += t+"\n"; }
 
-function log(t){
-    document.getElementById("status").textContent = t;
+async function join(){
+  const code = document.getElementById("codeInput").value.trim();
+  if(code.length != 8) return alert("8자리 코드 입력!");
+
+  log("📡 Offer 가져오는 중...");
+
+  let offerEnc = await fetch(WORKER + code);
+  if(!offerEnc.ok) return log("❌ Offer 없음");
+
+  let offerData = await offerEnc.text();
+  let sdp = LZString.decompressFromEncodedURIComponent(offerData);
+
+  pc = new RTCPeerConnection();
+  pc.ondatachannel = ev=>{
+    channel = ev.channel;
+    channel.onmessage = e=> log("👤 Host: " + e.data);
+    channel.onopen = ()=> log("🔵 연결됨!");
+  };
+
+  await pc.setRemoteDescription({ type:"offer", sdp });
+
+  let answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  let ansCompressed = LZString.compressToEncodedURIComponent(answer.sdp);
+
+  // Worker에 answer 저장
+  await fetch(WORKER + code + "_ans", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ data: ansCompressed })
+  });
+
+  log("📨 Answer 전송 완료!");
 }
-
-async function connectRoom(){
-    let code = document.getElementById("room").value.trim();
-    if(code.length !== 8){
-        alert("8자리 코드 입력해라");
-        return;
-    }
-    log("서버에서 Offer 가져오는 중...");
-
-    let offerData = await fetch(SERVER + code).then(res => res.text());
-
-    if(!offerData){
-        log("오류: Offer 없음");
-        return;
-    }
-
-    let offerSDP;
-    try {
-        offerSDP = LZString.decompressFromEncodedURIComponent(offerData);
-    } catch(e){
-        log("SDP 해제 실패");
-        return;
-    }
-
-    pc = new RTCPeerConnection();
-    pc.ondatachannel = e => {
-        channel = e.channel;
-        channel.onmessage = msg => console.log("Host:", msg.data);
-    };
-
-    await pc.setRemoteDescription({ type:"offer", sdp:offerSDP });
-
-    let answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-
-    let compressed = LZString.compressToEncodedURIComponent(answer.sdp);
-
-    document.getElementById("answerBox").value = compressed;
-    log("Answer 생성 완료. Host에게 붙여넣어라.");
-}
-
-// LZString CDN 추가
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 
 </body>
 </html>
