@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloudflare Workers 프록시 이미지 생성기 (ai.keddie213.workers.dev 적용)</title>
+    <title>asdadsCloudflare Workers 프록시 이미지 생성기 (최종)</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background-color: #f4f7f6; }
         .container { max-width: 800px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); }
@@ -22,7 +22,7 @@
 <body>
     <div class="container">
         <h1>🚀 Workers를 이용한 이미지 생성기</h1>
-        <p>API 키와 Prompt는 Cloudflare Workers (<code style="background-color: #eee; padding: 2px 4px; border-radius: 4px;">ai.keddie213.workers.dev</code>)를 통해 전송됩니다.</p>
+        <p>요청은 도메인에 연결된 Cloudflare Workers (<code style="background-color: #eee; padding: 2px 4px; border-radius: 4px;">test7.site/ai</code>)를 통해 처리됩니다.</p>
 
         <div class="input-group">
             <label for="api-key-input">API Key:</label>
@@ -42,8 +42,8 @@
     </div>
 
     <script>
-        // 사용자 Worker 주소: ai.keddie213.workers.dev 적용
-        const WORKERS_ENDPOINT_URL = "https://ai.keddie213.workers.dev"; 
+        // ⚠️ Worker 주소를 최종 라우팅 경로인 "https://test7.site/ai"로 변경했습니다.
+        const WORKERS_ENDPOINT_URL = "https://test7.site/ai"; 
 
         async function generateImage() {
             const apiKey = document.getElementById('api-key-input').value.trim();
@@ -65,7 +65,7 @@
             statusMessage.style.borderColor = '#ff9800';
 
             try {
-                // Workers 엔드포인트로 API Key와 Prompt를 함께 전송
+                // Workers 엔드포인트로 API Key와 Prompt를 함께 POST 전송
                 const response = await fetch(WORKERS_ENDPOINT_URL, {
                     method: 'POST',
                     headers: {
@@ -97,18 +97,18 @@
                     statusMessage.style.borderColor = '#e53935';
                     console.error('API Error via Worker:', data.error);
                 } else {
-                     // 기타 응답 문제
-                     statusMessage.textContent = `❌ 생성 오류. HTTP 상태 코드: ${response.status} (Worker 응답 확인 필요)`;
+                     // 기타 응답 문제 (예: Worker가 404를 반환한 경우)
+                     statusMessage.textContent = `❌ 생성 오류. HTTP 상태 코드: ${response.status}. (Worker 라우팅 또는 코드 확인 필요)`;
                      statusMessage.style.color = '#e53935';
                      statusMessage.style.borderColor = '#e53935';
                 }
 
             } catch (error) {
-                // Workers 연결 자체의 문제 (이 경우에도 Failed to fetch 발생 가능)
-                statusMessage.textContent = `❌ Workers 연결 오류 발생: ${error.message}`;
+                // 네트워크 연결 자체의 문제
+                statusMessage.textContent = `❌ 네트워크 연결 오류 발생: ${error.message}`;
                 statusMessage.style.color = '#e53935';
                 statusMessage.style.borderColor = '#e53935';
-                console.error('Workers Fetch Error:', error);
+                console.error('Fetch Error:', error);
             }
         }
     </script>
