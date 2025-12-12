@@ -1,26 +1,135 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <title>QR 생성</title>
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      padding: 20px;
-    }
-    #qrcode {
-      margin-top: 20px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 키 입력형 이미지 생성기 (Imagen API)</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background-color: #f4f7f6; }
+        .container { max-width: 800px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); }
+        h1 { color: #1e88e5; text-align: center; margin-bottom: 25px; }
+        .input-group { margin-bottom: 15px; display: flex; align-items: center; }
+        .input-group label { margin-right: 10px; font-weight: bold; width: 100px; }
+        #api-key-input, #prompt-input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+        #prompt-input { margin-right: 10px; }
+        #prompt-container { display: flex; align-items: center; }
+        button { padding: 10px 15px; background-color: #1e88e5; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; transition: background-color 0.3s; }
+        button:hover { background-color: #1565c0; }
+        #status-message { margin-top: 20px; font-size: 16px; color: #e53935; text-align: center; padding: 10px; border: 1px dashed #e53935; border-radius: 6px; }
+        #security-warning { color: #ff9800; font-size: 14px; margin-top: 5px; text-align: center; }
+        #image-container { margin-top: 30px; display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
+        .generated-image { max-width: 100%; height: auto; border: 5px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <h1>🚀 Google AI 이미지 생성기 (Gemini API)</h1>
+        <p id="security-warning">⚠️ **경고:** 이 페이지는 테스트용이며, API 키가 클라이언트 브라우저에 노출됩니다. 실제 서비스에 사용하지 마세요.</p>
 
-  <input id="text" type="text" placeholder="URL 입력" style="width:300px">
-  <button onclick="makeQR()">QR 생성</button>
+        <div class="input-group">
+            <label for="api-key-input">API Key:</label>
+            <input type="password" id="api-key-input" placeholder="Google AI Studio에서 발급받은 키 입력" size="60">
+        </div>
 
-  <div id="qrcode"></div>
+        <div id="prompt-container" class="input-group">
+            <label for="prompt-input">설명 (Prompt):</label>
+            <input type="text" id="prompt-input" placeholder="생성할 이미지 설명을 자세하게 입력하세요" required>
+            <button onclick="generateImage()">생성 시작</button>
+        </div>
+        
+        <p id="status-message">API 키를 입력하고 설명을 작성한 후 '생성 시작' 버튼을 누르세요.</p>
+        
+        <div id="image-container">
+            </div>
+    </div>
 
-  <script src="qr.js"></script>
+    <script>
+        const MODEL_NAME = "imagen-3.0-generate-002"; // Google의 최신 이미지 생성 모델
+
+        async function generateImage() {
+            const apiKey = document.getElementById('api-key-input').value.trim();
+            const prompt = document.getElementById('prompt-input').value.trim();
+            const statusMessage = document.getElementById('status-message');
+            const imageContainer = document.getElementById('image-container');
+            
+            // 키 및 프롬프트 유효성 검사
+            if (!apiKey) {
+                statusMessage.textContent = '🚨 오류: API 키를 입력해주세요!';
+                statusMessage.style.color = '#e53935';
+                return;
+            }
+            if (!prompt) {
+                statusMessage.textContent = '이미지 설명을 입력해주세요.';
+                statusMessage.style.color = '#e53935';
+                return;
+            }
+
+            // UI 초기화 및 로딩 상태 표시
+            imageContainer.innerHTML = '';
+            statusMessage.textContent = '⏳ 이미지를 생성 중입니다... 잠시만 기다려 주세요.';
+            statusMessage.style.color = '#ff9800';
+            statusMessage.style.borderColor = '#ff9800';
+
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateImages?key=${apiKey}`;
+            
+            const payload = {
+                requests: [{
+                    prompt: prompt,
+                    config: {
+                        numberOfImages: 1, // 생성할 이미지 개수
+                        outputMimeType: 'image/png', // 이미지 형식
+                    }
+                }]
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                const data = await response.json();
+                
+                if (data.generatedImages && data.generatedImages.length > 0) {
+                    statusMessage.textContent = '✅ 이미지 생성 완료!';
+                    statusMessage.style.color = '#4caf50';
+                    statusMessage.style.borderColor = '#4caf50';
+                    
+                    data.generatedImages.forEach(img => {
+                        const base64ImageBytes = img.image.imageBytes;
+                        const imgElement = document.createElement('img');
+                        
+                        // Base64 데이터를 이미지 소스로 설정
+                        imgElement.src = `data:image/png;base64,${base64ImageBytes}`;
+                        imgElement.classList.add('generated-image');
+                        imgElement.alt = prompt;
+                        
+                        imageContainer.appendChild(imgElement);
+                    });
+                } else if (data.error) {
+                    // API 응답에 오류가 포함된 경우 (예: 400 Bad Request, API Key Invalid 등)
+                    statusMessage.textContent = `❌ API 오류 발생: ${data.error.message}`;
+                    statusMessage.style.color = '#e53935';
+                    statusMessage.style.borderColor = '#e53935';
+                    console.error('API Error:', data.error);
+                } else {
+                     statusMessage.textContent = '❌ 알 수 없는 생성 오류 발생.';
+                     statusMessage.style.color = '#e53935';
+                     statusMessage.style.borderColor = '#e53935';
+                }
+
+            } catch (error) {
+                // 네트워크 연결 자체의 문제인 경우 (예: Failed to fetch, CORS 문제)
+                statusMessage.textContent = `❌ 네트워크 오류 발생: Failed to fetch. (서버/CORS/연결 확인 필요)`;
+                statusMessage.style.color = '#e53935';
+                statusMessage.style.borderColor = '#e53935';
+                console.error('Fetch Error:', error);
+            }
+        }
+    </script>
 </body>
 </html>
