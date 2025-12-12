@@ -1,74 +1,26 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-<meta charset="UTF-8">
-<title>Host</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
-<style>
-body { font-family: monospace; margin: 20px; }
-.codeBox { font-size: 40px; border: 2px dashed #333; padding: 10px; display: inline-block; }
-</style>
+  <meta charset="UTF-8" />
+  <title>QR 생성</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      padding: 20px;
+    }
+    #qrcode {
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
 
-<h2>HOST</h2>
-<button onclick="startHost()">Create Offer</button>
-<div id="codeBox" class="codeBox"></div>
+  <input id="text" type="text" placeholder="URL 입력" style="width:300px">
+  <button onclick="makeQR()">QR 생성</button>
 
-<pre id="log"></pre>
+  <div id="qrcode"></div>
 
-<script>
-const WORKER = "https://chat.keddie213.workers.dev/";
-
-function log(t){ document.getElementById("log").textContent += t + "\n"; }
-
-function rand8(){
-  const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return [...Array(8)].map(()=>c[Math.floor(Math.random()*c.length)]).join("");
-}
-
-let pc, channel;
-
-async function startHost(){
-  pc = new RTCPeerConnection();
-  channel = pc.createDataChannel("msg");
-  channel.onopen = () => log("🔵 DataChannel opened!");
-  channel.onmessage = e => log("👤 Guest: " + e.data);
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-
-  const code = rand8();
-  document.getElementById("codeBox").innerText = code;
-
-  const comp = LZString.compressToEncodedURIComponent(offer.sdp);
-
-  await fetch(WORKER + code, {
-    method: "POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ data: comp })
-  });
-
-  log("📨 Offer saved → " + code);
-  waitAnswer(code);
-}
-
-async function waitAnswer(code){
-  log("⏳ Waiting for answer...");
-
-  while(true){
-    const res = await fetch(WORKER + code + "_ans");
-    if(res.ok){
-      const enc = await res.text();
-      const sdp = LZString.decompressFromEncodedURIComponent(enc);
-      await pc.setRemoteDescription({ type: "answer", sdp });
-      log("✅ Answer applied! Connected.");
-      break;
-    }
-    await new Promise(r => setTimeout(r, 800));
-  }
-}
-</script>
-
+  <script src="qr.js"></script>
 </body>
 </html>
