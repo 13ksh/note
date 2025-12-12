@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>asdadsCloudflare Workers 프록시 이미지 생성기 (최종)</title>
+    <title>Cloudflare Workers 프록시 이미지 생성기 (최종)</title>
     <style>
+        /* (스타일은 이전과 동일) */
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background-color: #f4f7f6; }
         .container { max-width: 800px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); }
         h1 { color: #1e88e5; text-align: center; margin-bottom: 25px; }
@@ -22,7 +23,7 @@
 <body>
     <div class="container">
         <h1>🚀 Workers를 이용한 이미지 생성기</h1>
-        <p>요청은 도메인에 연결된 Cloudflare Workers (<code style="background-color: #eee; padding: 2px 4px; border-radius: 4px;">test7.site/ai</code>)를 통해 처리됩니다.</p>
+        <p>요청은 **Workers의 기본 주소** (<code style="background-color: #eee; padding: 2px 4px; border-radius: 4px;">ai.keddie213.workers.dev</code>)를 통해 처리됩니다.</p>
 
         <div class="input-group">
             <label for="api-key-input">API Key:</label>
@@ -42,8 +43,8 @@
     </div>
 
     <script>
-        // ⚠️ Worker 주소를 최종 라우팅 경로인 "https://test7.site/ai"로 변경했습니다.
-        const WORKERS_ENDPOINT_URL = "https://test7.site/ai"; 
+        // ⚠️ Worker 주소를 정상 작동이 확인된 "ai.keddie213.workers.dev"로 복귀합니다.
+        const WORKERS_ENDPOINT_URL = "https://ai.keddie213.workers.dev"; 
 
         async function generateImage() {
             const apiKey = document.getElementById('api-key-input').value.trim();
@@ -65,7 +66,6 @@
             statusMessage.style.borderColor = '#ff9800';
 
             try {
-                // Workers 엔드포인트로 API Key와 Prompt를 함께 POST 전송
                 const response = await fetch(WORKERS_ENDPOINT_URL, {
                     method: 'POST',
                     headers: {
@@ -77,7 +77,6 @@
                 const data = await response.json();
                 
                 if (response.ok && data.generatedImages && data.generatedImages.length > 0) {
-                    // 성공적으로 이미지를 받은 경우
                     statusMessage.textContent = '✅ 이미지 생성 완료!';
                     statusMessage.style.color = '#4caf50';
                     statusMessage.style.borderColor = '#4caf50';
@@ -91,20 +90,19 @@
                         imageContainer.appendChild(imgElement);
                     });
                 } else if (data.error) {
-                    // Google API에서 오류가 발생하여 Worker가 전달한 경우
-                    statusMessage.textContent = `❌ API 오류 (Worker 경유): ${data.error.message}`;
+                    // API 또는 Worker 내부 오류
+                    statusMessage.textContent = `❌ 오류: ${data.error.message}`;
                     statusMessage.style.color = '#e53935';
                     statusMessage.style.borderColor = '#e53935';
                     console.error('API Error via Worker:', data.error);
                 } else {
-                     // 기타 응답 문제 (예: Worker가 404를 반환한 경우)
-                     statusMessage.textContent = `❌ 생성 오류. HTTP 상태 코드: ${response.status}. (Worker 라우팅 또는 코드 확인 필요)`;
+                     statusMessage.textContent = `❌ 생성 오류. HTTP 상태 코드: ${response.status}`;
                      statusMessage.style.color = '#e53935';
                      statusMessage.style.borderColor = '#e53935';
                 }
 
             } catch (error) {
-                // 네트워크 연결 자체의 문제
+                // Workers 연결 실패
                 statusMessage.textContent = `❌ 네트워크 연결 오류 발생: ${error.message}`;
                 statusMessage.style.color = '#e53935';
                 statusMessage.style.borderColor = '#e53935';
