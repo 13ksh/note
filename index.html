@@ -1,112 +1,176 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloudflare Workers 프록시 이미지 생성기 (최종)</title>
+    <title>fullAutoPPT</title>
     <style>
-        /* (스타일은 이전과 동일) */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; background-color: #f4f7f6; }
-        .container { max-width: 800px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); }
-        h1 { color: #1e88e5; text-align: center; margin-bottom: 25px; }
-        .input-group { margin-bottom: 15px; display: flex; align-items: center; }
-        .input-group label { margin-right: 10px; font-weight: bold; width: 100px; flex-shrink: 0; }
-        #api-key-input, #prompt-input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
-        #prompt-container { display: flex; align-items: center; }
-        button { padding: 10px 15px; background-color: #1e88e5; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; transition: background-color 0.3s; margin-left: 10px; }
-        button:hover { background-color: #1565c0; }
-        #status-message { margin-top: 20px; font-size: 16px; color: #e53935; text-align: center; padding: 10px; border: 1px dashed #e53935; border-radius: 6px; }
-        #image-container { margin-top: 30px; display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
-        .generated-image { max-width: 100%; height: auto; border: 5px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        #input-area { margin-bottom: 20px; }
+        #prompt-input { width: 80%; padding: 10px; margin-right: 10px; }
+        #output-area { 
+            border: 1px solid #ccc; 
+            padding: 15px; 
+            min-height: 100px; 
+            white-space: pre-wrap;
+            background-color: #f9f9f9;
+        }
+        #loading { color: blue; display: none; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🚀 Workers를 이용한 이미지 생성기</h1>
-        <p>요청은 **Workers의 기본 주소** (<code style="background-color: #eee; padding: 2px 4px; border-radius: 4px;">ai1.keddie213.workers.dev</code>)를 통해 처리됩니다.</p>
+    <h1>fullAutoPPT</h1>
 
-        <div class="input-group">
-            <label for="api-key-input">API Key:</label>
-            <input type="password" id="api-key-input" placeholder="Google AI 키를 입력하세요" size="60">
-        </div>
-
-        <div id="prompt-container" class="input-group">
-            <label for="prompt-input">설명 (Prompt):</label>
-            <input type="text" id="prompt-input" placeholder="생성할 이미지 설명을 자세하게 입력하세요" required>
-            <button onclick="generateImage()">생성 시작</button>
-        </div>
-        
-        <p id="status-message">키와 설명을 입력하고 '생성 시작' 버튼을 누르세요.</p>
-        
-        <div id="image-container">
-            </div>
+    <div id="input-area">
+        <label for="apikey">API 키:</label>
+        <input id="apikey"/><br/>
+        <a href="https://aistudio.google.com/api-keys" target="_blank">API 키 발급 받기</a><br/><br/>
+        <label for="slideCount">슬라이드 수 (8~48):</label>
+        <input id="slideCount" type="number" min="8" max="48" value="8" /><br/><br/>
+        <label for="prompt-input">프롬프트 입력:</label>
+        <input id="prompt-input" rows="4" placeholder="나무가 무엇인가요?" autofocus></input>
+        <button onclick="callGeminiApi()">응답 받기</button>
     </div>
 
-    <script>
-        // ⚠️ Worker 주소를 정상 작동이 확인된 "ai1.keddie213.workers.dev"로 복귀합니다.
-        const WORKERS_ENDPOINT_URL = "https://ai1.keddie213.workers.dev"; 
+    <div id="loading">... 응답을 처리 중입니다 ...</div>
+    
+    <h2>카드 내용 줄거리:</h2>
+    <div id="output-area">여기에 카드 내용 줄거리가 표시됩니다.</div>
+    
+    <button onclick="callGeminiApi()">다음(완성본 받기)</button>
 
-        async function generateImage() {
-            const apiKey = document.getElementById('api-key-input').value.trim();
-            const prompt = document.getElementById('prompt-input').value.trim();
-            const statusMessage = document.getElementById('status-message');
-            const imageContainer = document.getElementById('image-container');
-            
-            if (!apiKey || !prompt) {
-                statusMessage.textContent = '🚨 오류: API 키와 설명을 모두 입력해주세요!';
-                statusMessage.style.color = '#e53935';
-                statusMessage.style.borderColor = '#e53935';
+    <script>
+        const input = document.createElement("output-area");
+        let API_KEY;
+        const MODEL_NAME = "gemini-2.5-flash";
+        let API_URL;
+        
+        const outputElement = document.getElementById('output-area');
+        const slideCountElement = document.getElementById('slideCount');
+        const promptInputElement = document.getElementById('prompt-input');
+        const loadingElement = document.getElementById('loading');
+        const basePrompt1 =
+`주제가 주어지면  
+해당 주제에 대해 “모든 것”을 설명하는  
+교육용 PPT를 만들어 주세요.
+
+주제가 주어지면  
+학교 발표용으로 사용할 수 있는  
+자연스러운 PPT를 만들어 주세요.
+
+조건:
+- 교과서나 학습 자료처럼 보이게 작성
+- 과도한 전문 용어 사용 금지
+- 광고처럼 보이는 표현 금지
+- "AI", "자동 생성" 같은 단어 사용 금지
+- 초등학생도 이해할 수 있는 쉬운 표현 사용
+- 질문형 제목과 설명형 제목을 섞어서 구성
+- 전체 흐름이 자연스럽게 이어지도록 구성
+- 총 `;
+const basePrompt2 = `개의 항목으로 구성 (중요)
+
+스타일 예시: 
+라면에 대하여
+라면은 전 세계에서 널리 소비되는 즉석식품이다.
+간단하게 조리할 수 있어 많은 사람들에게 사랑받고 있다.
+
+라면이란 무엇인가?
+라면은 밀가루로 만든 면을 기름에 튀기거나 건조한 식품이다.
+뜨거운 물에 끓이기만 하면 바로 먹을 수 있다.
+
+라면의 역사
+라면은 1958년 일본에서 처음 만들어졌다.
+이후 한국을 포함한 여러 나라로 퍼지며 발전했다.
+
+라면의 종류
+국물 라면, 볶음 라면, 컵라면 등 다양한 종류가 있다.
+나라별로 맛과 조리법도 다르다.
+
+라면의 장점과 단점
+조리가 빠르고 맛있다는 장점이 있다.
+하지만 나트륨 함량이 높다는 단점도 있다.
+
+라면의 문화적 영향
+라면은 간편식 문화를 대표하는 음식이다.
+영화, 드라마 등에서도 자주 등장한다.
+
+위 형식과 같은 스타일로만 출력해 주세요.
+
+주제 : `;
+
+        function getCardValue(id) {
+            const el = document.getElementById("card"+id);
+            return el ? el.value : null;
+        }
+
+        async function callGeminiApi() {
+            API_KEY = document.getElementById('apikey').value;
+            API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
+            const userPrompt = basePrompt1 + slideCountElement.value + basePrompt2 + promptInputElement.value.trim();
+
+            if (userPrompt === "") {
+                outputElement.innerText = "프롬프트를 입력해 주세요.";
                 return;
             }
 
-            // UI 업데이트
-            imageContainer.innerHTML = '';
-            statusMessage.textContent = '⏳ Worker를 통해 이미지를 생성 중입니다...';
-            statusMessage.style.color = '#ff9800';
-            statusMessage.style.borderColor = '#ff9800';
+            // UI 상태 업데이트
+            outputElement.innerText = "";
+            loadingElement.style.display = 'block';
+
+            const payload = {
+                contents: [
+                    {
+                        parts: [
+                            { text: userPrompt }
+                        ]
+                    }
+                ]
+            };
 
             try {
-                const response = await fetch(WORKERS_ENDPOINT_URL, {
+                const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ apiKey, prompt }),
+                    body: JSON.stringify(payload)
                 });
+
+                if (!response.ok) {
+                    throw new Error(`API 호출 실패: ${response.status} ${response.statusText}`);
+                }
 
                 const data = await response.json();
                 
-                if (response.ok && data.generatedImages && data.generatedImages.length > 0) {
-                    statusMessage.textContent = '✅ 이미지 생성 완료!';
-                    statusMessage.style.color = '#4caf50';
-                    statusMessage.style.borderColor = '#4caf50';
-                    
-                    data.generatedImages.forEach(img => {
-                        const base64ImageBytes = img.image.imageBytes;
-                        const imgElement = document.createElement('img');
-                        imgElement.src = `data:image/png;base64,${base64ImageBytes}`;
-                        imgElement.classList.add('generated-image');
-                        imgElement.alt = prompt;
-                        imageContainer.appendChild(imgElement);
-                    });
-                } else if (data.error) {
-                    // API 또는 Worker 내부 오류
-                    statusMessage.textContent = `❌ 오류: ${data.error.message}`;
-                    statusMessage.style.color = '#e53935';
-                    statusMessage.style.borderColor = '#e53935';
-                    console.error('API Error via Worker:', data.error);
-                } else {
-                     statusMessage.textContent = `❌ 생성 오류. HTTP 상태 코드: ${response.status}`;
-                     statusMessage.style.color = '#e53935';
-                     statusMessage.style.borderColor = '#e53935';
+                // 모델의 응답 텍스트 추출 (안전한 추출 로직)
+                let aiResponseText = "응답을 받을 수 없습니다. 데이터 구조를 확인하세요.";
+                if (data.candidates && data.candidates.length > 0 && 
+                    data.candidates[0].content && data.candidates[0].content.parts && 
+                    data.candidates[0].content.parts.length > 0) {
+                    aiResponseText = data.candidates[0].content.parts[0].text;
                 }
+                
+                const list67 = aiResponseText
+                .split("\n")
+                .map(s => s.replace(/^\d{2}\.\s*/, "").trim())
+                .map((v, i) => `${v}`);
+                outputElement.innerHTML = "";
 
+                for (let i = 1; i <= list67.length; i++) {
+                    const input = document.createElement("input");
+                    input.type = "text";
+                    input.id = "card" + i;
+                    input.value = list67[i - 1];
+                    input.style.display = "block";
+                    input.style.width = "100%";
+                    input.style.marginBottom = "6px";
+
+                    outputElement.appendChild(input);
+                }
             } catch (error) {
-                // Workers 연결 실패
-                statusMessage.textContent = `❌ 네트워크 연결 오류 발생: ${error.message}`;
-                statusMessage.style.color = '#e53935';
-                statusMessage.style.borderColor = '#e53935';
-                console.error('Fetch Error:', error);
+                console.error("오류 발생:", error);
+                outputElement.innerText = `오류 발생: ${error.message}. API 키와 네트워크 연결을 확인해 주세요.`;
+            } finally {
+                // UI 상태 초기화
+                loadingElement.style.display = 'none';
             }
         }
     </script>

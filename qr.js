@@ -6,7 +6,7 @@ function makeQR() {
 
   if (!text) return;
 
-  box.innerHTML = ""; // 기존 QR 제거
+  box.innerHTML = "";
 
   qr = new QRCode(box, {
     text: text,

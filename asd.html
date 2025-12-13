@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>PPT 여러 슬라이드 자동 생성</title>
+
+  <!-- pptxgenjs -->
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 30px;
+    }
+    button {
+      padding: 12px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<h1>PPT 여러 슬라이드 생성</h1>
+<button onclick="makePPT()">PPT 만들기</button>
+
+<script>
+function makePPT() {
+  let pptx = new PptxGenJS();
+
+  // ===== 데이터 (여기만 바꾸면 됨) =====
+  let slidesData = [
+    {
+      title: "유튜브에 관한 모든 것",
+      body: "자동으로 생성된 발표 자료입니다."
+    },
+    {
+      title: "유튜브란?",
+      body: "유튜브는 동영상을 공유하는 플랫폼입니다."
+    },
+    {
+      title: "유튜브의 역사",
+      body: "2005년에 시작되어 빠르게 성장했습니다."
+    },
+    {
+      title: "유튜브의 영향",
+      body: "미디어 소비 방식을 크게 바꾸었습니다."
+    }
+  ];
+
+  // ===== 슬라이드 생성 =====
+  slidesData.forEach((item, index) => {
+    let slide = pptx.addSlide();
+
+    // 제목
+    slide.addText(item.title, {
+      x: 0.5,
+      y: 0.6,
+      w: 9,
+      h: 1,
+      fontSize: 30,
+      bold: true,
+      color: "000000"
+    });
+
+    // 본문
+    slide.addText(item.body, {
+      x: 0.8,
+      y: 2,
+      w: 8.5,
+      h: 2,
+      fontSize: 18,
+      color: "333333"
+    });
+
+    // 하단 페이지 표시 (선택)
+    slide.addText(`${index + 1} / ${slidesData.length}`, {
+      x: 8,
+      y: 5,
+      fontSize: 10,
+      color: "888888"
+    });
+  });
+
+  // ===== 저장 =====
+  pptx.writeFile("여러슬라이드_자동생성.pptx");
+}
+</script>
+
+</body>
+</html>
